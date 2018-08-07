@@ -90,7 +90,7 @@ func (s *SmartContract) addTransaction(APIstub shim.ChaincodeStubInterface, args
 		return shim.Error("Invalid parameter")
 	}
 
-	if currentTrans.TransactionID == "" || checkTransactionIDExistence(APIstub, currentTrans.TransactionID) {
+	if currentTrans.TransactionID == "" || s.checkTransactionIDExistence(APIstub, currentTrans.TransactionID) {
 		return shim.Error("Invalid or already existent transaction id")
 	}
 
@@ -118,7 +118,7 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 		return shim.Error("Invalid parameter")
 	}
 
-	if currentTrans.TransactionID == "" || !checkTransactionIDExistence(APIstub, currentTrans.TransactionID) {
+	if currentTrans.TransactionID == "" || !s.checkTransactionIDExistence(APIstub, currentTrans.TransactionID) {
 		return shim.Error("Invalid transactionId")
 	}
 
@@ -173,7 +173,7 @@ func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, 
 	}
 
 	transID := args[0]
-	if !checkTransactionIDExistence(APIstub, transID) {
+	if !s.checkTransactionIDExistence(APIstub, transID) {
 		return shim.Error("Transaction does not exist")
 	}
 
@@ -205,7 +205,7 @@ func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, 
 }
 
 //checkTransactionIDExistence used to check if a transaction already exists in the blockchain before adding it
-func checkTransactionIDExistence(APIstub shim.ChaincodeStubInterface, transactionID string) bool {
+func (s *SmartContract) checkTransactionIDExistence(APIstub shim.ChaincodeStubInterface, transactionID string) bool {
 
 	transaction, _ := APIstub.GetState(transactionID)
 
