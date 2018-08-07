@@ -32,6 +32,12 @@ type PeerUpdateRequestModel struct {
 	Decision      string `json:"Decision"`
 }
 
+//FinalDecisionResponseModel Model to represent the response model for a final decision request
+type FinalDecisionResponseModel struct {
+	TransactionID string `json:"TransactionID"`
+	FinalDecision string `json:"FinalDecision"`
+}
+
 //Init initializes the ledger
 func (s *SmartContract) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
 	return shim.Success(nil)
@@ -50,7 +56,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 	case "makePeerDecision":
 		s.makePeerDecision(APIstub, args)
 	case "queryFinalDecision":
-		//TODO:
+		s.queryFinalDecision(APIstub, args)
 	}
 	//functions
 	return shim.Error("Invalid function")
@@ -159,6 +165,43 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 	APIstub.PutState(transaction.TransactionID, marshalledUpdate)
 
 	return shim.Success(nil)
+}
+
+func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
+	if len(args) <= 0 {
+		return shim.Error("Invalid parameter number")
+	}
+
+	transID := args[0]
+	if !checkTransactionIDExistence(APIstub, transID) {
+		return shim.Error("Transaction does not exist")
+	}
+
+	trans, err := APIstub.GetState(transID)
+
+	if err != nil {
+		return shim.Error("Internal error while getting the transaction")
+	}
+
+	scTrans := Transaction{}
+
+	if unmarshalErr := json.Unmarshal(trans, &scTrans); unmarshalErr != nil {
+		return shim.Error("Internal error while unmarshalling data")
+	}
+
+	if scTrans.TransactionID == "" {
+		return shim.Error("Internal error while getting transaction")
+	}
+
+	var finalDecision = FinalDecisionResponseModel{TransactionID: scTrans.TransactionID, FinalDecision: scTrans.FinalDecision}
+
+	finalDecisionBytes, marshalError := json.Marshal(finalDecision)
+
+	if marshalError != nil {
+		return shim.Error("Internal error while handling transaction")
+	}
+
+	return shim.Success(finalDecisionBytes)
 }
 
 //checkTransactionIDExistence used to check if a transaction already exists in the blockchain before adding it
