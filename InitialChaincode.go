@@ -38,11 +38,17 @@ type FinalDecisionResponseModel struct {
 	FinalDecision string `json:"FinalDecision"`
 }
 
-//const define constants for transaction states
+//PeerModel represents a peer
+type PeerModel struct {
+	PeerID string `json:"PeerID"`
+}
+
+//const define constants for transaction states and general keys
 const (
-	PendingState = "P"
-	CommitState  = "C"
-	AbortState   = "A"
+	PendingState       = "P"
+	CommitState        = "C"
+	AbortState         = "A"
+	RegisteredPeersKey = "RegisteredPeers"
 )
 
 //Init initializes the ledger
@@ -64,6 +70,10 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 		s.makePeerDecision(APIstub, args)
 	case "queryFinalDecision":
 		s.queryFinalDecision(APIstub, args)
+	case "registerPeer":
+		s.registerPeer(APIstub, args)
+	case "getRegisteredPeers":
+		//todo:
 	}
 	//functions
 	return shim.Error("Invalid function")
@@ -225,6 +235,56 @@ func (s *SmartContract) checkTransactionIDExistence(APIstub shim.ChaincodeStubIn
 	}
 
 	return false
+}
+
+//registerPeer used to register a new peer into the list of peers registered in the commit process
+func (s *SmartContract) registerPeer(stub shim.ChaincodeStubInterface, args []string) sc.Response {
+	if len(args) <= 0 {
+		return shim.Error("Invalid parameters")
+	}
+
+	currentPeers, err := stub.GetState(RegisteredPeersKey)
+
+	if err != nil || currentPeers == nil {
+		newPeers := []PeerModel{}
+		newPeers = append(newPeers, PeerModel{PeerID: args[0]})
+		marshalledPeer, marshalErr := json.Marshal(newPeers)
+
+		if marshalErr != nil {
+			return shim.Error("Error while handling registration")
+		}
+
+		stub.PutState(RegisteredPeersKey, marshalledPeer)
+	} else {
+		unmarshalled := []PeerModel{}
+
+		if unmarshallErr := json.Unmarshal(currentPeers, &unmarshalled); unmarshallErr != nil {
+			return shim.Error("Error while retrieving data")
+		}
+
+		unmarshalled = append(unmarshalled, PeerModel{PeerID: args[0]})
+
+		updatedMarshal, updatedErr := json.Marshal(unmarshalled)
+
+		if updatedErr != nil {
+			return shim.Error("Error while inserting peer")
+		}
+
+		stub.PutState(RegisteredPeersKey, updatedMarshal)
+	}
+
+	return shim.Success(nil)
+}
+
+func (s *SmartContract) getRegisteredPeers(stub shim.ChaincodeStubInterface) sc.Response {
+
+	peers, err := stub.GetState(RegisteredPeersKey)
+
+	if err != nil {
+		return shim.Error("Error retrieving the list of peers")
+	}
+
+	return shim.Success(peers)
 }
 
 func main() {
