@@ -38,6 +38,13 @@ type FinalDecisionResponseModel struct {
 	FinalDecision string `json:"FinalDecision"`
 }
 
+//const define constants for transaction states
+const (
+	PendingState = "P"
+	CommitState  = "C"
+	AbortState   = "A"
+)
+
 //Init initializes the ledger
 func (s *SmartContract) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
 	return shim.Success(nil)
@@ -94,6 +101,8 @@ func (s *SmartContract) addTransaction(APIstub shim.ChaincodeStubInterface, args
 		return shim.Error("Invalid or already existent transaction id")
 	}
 
+	currentTrans.FinalDecision = PendingState
+
 	transactionBytes, marshalError := json.Marshal(currentTrans)
 
 	if marshalError != nil {
@@ -112,7 +121,7 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 		return shim.Error("Invalid arguments")
 	}
 
-	var currentTrans PeerUpdateRequestModel
+	currentTrans := PeerUpdateRequestModel{}
 
 	if err := json.Unmarshal([]byte(args[0]), &currentTrans); err != nil {
 		return shim.Error("Invalid parameter")
@@ -155,6 +164,8 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 	if !peerUpdated {
 		return shim.Error("Peer could not be found")
 	}
+
+	//TODO: Check if all peers have voted to make decision
 
 	marshalledUpdate, marshallError := json.Marshal(transaction)
 
