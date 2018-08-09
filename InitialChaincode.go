@@ -91,6 +91,11 @@ func (s *SmartContract) queryTransaction(APIstub shim.ChaincodeStubInterface, ar
 	if err != nil {
 		return shim.Error("Error getting transaction")
 	}
+
+	if trans == nil {
+		return shim.Error("Transaction does not exist")
+	}
+
 	return shim.Success(trans)
 }
 
@@ -111,7 +116,16 @@ func (s *SmartContract) addTransaction(APIstub shim.ChaincodeStubInterface, args
 		return shim.Error("Invalid or already existent transaction id")
 	}
 
+	if len(currentTrans.InvolvedPeers) <= 0 {
+		return shim.Error("There are no peers involved in the transaction")
+	}
+
 	currentTrans.FinalDecision = PendingState
+
+	for index := range currentTrans.InvolvedPeers {
+
+		currentTrans.InvolvedPeers[index].PeerDecision = PendingState
+	}
 
 	transactionBytes, marshalError := json.Marshal(currentTrans)
 
@@ -231,10 +245,10 @@ func (s *SmartContract) checkTransactionIDExistence(APIstub shim.ChaincodeStubIn
 	transaction, _ := APIstub.GetState(transactionID)
 
 	if transaction == nil {
-		return true
+		return false
 	}
 
-	return false
+	return true
 }
 
 //registerPeer used to register a new peer into the list of peers registered in the commit process
