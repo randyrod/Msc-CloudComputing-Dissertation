@@ -51,7 +51,7 @@ const (
 	RegisteredPeersKey = "RegisteredPeers"
 )
 
-//Init initializes the ledger
+//Init initializes the chaincode
 func (s *SmartContract) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
 	return shim.Success(nil)
 }
@@ -73,7 +73,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 	case "registerPeer":
 		s.registerPeer(APIstub, args)
 	case "getRegisteredPeers":
-		//todo:
+		s.getRegisteredPeers(APIstub)
 	}
 	//functions
 	return shim.Error("Invalid function")
