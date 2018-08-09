@@ -63,17 +63,17 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 
 	switch function {
 	case "addTransaction":
-		s.addTransaction(APIstub, args)
+		return s.addTransaction(APIstub, args)
 	case "queryTransaction":
-		s.queryTransaction(APIstub, args)
+		return s.queryTransaction(APIstub, args)
 	case "makePeerDecision":
-		s.makePeerDecision(APIstub, args)
+		return s.makePeerDecision(APIstub, args)
 	case "queryFinalDecision":
-		s.queryFinalDecision(APIstub, args)
+		return s.queryFinalDecision(APIstub, args)
 	case "registerPeer":
-		s.registerPeer(APIstub, args)
+		return s.registerPeer(APIstub, args)
 	case "getRegisteredPeers":
-		s.getRegisteredPeers(APIstub)
+		return s.getRegisteredPeers(APIstub)
 	}
 	//functions
 	return shim.Error("Invalid function")
@@ -288,9 +288,8 @@ func (s *SmartContract) getRegisteredPeers(stub shim.ChaincodeStubInterface) sc.
 }
 
 func main() {
-	err := shim.Start(new(SmartContract))
 
-	if err != nil {
+	if err := shim.Start(new(SmartContract)); err != nil {
 		fmt.Printf("Error creating the new Smart Contract: %s", err)
 	}
 }
