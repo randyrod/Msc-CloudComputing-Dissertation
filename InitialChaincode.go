@@ -79,6 +79,8 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 		return s.getRegisteredPeers(APIstub)
 	case "getPeerPendingTransactions":
 		return s.getPeerPendingTransactions(APIstub, args)
+	case "clearPeers":
+		return s.clearPeers(APIstub)
 	}
 	//functions
 	return shim.Error("Invalid function")
@@ -116,7 +118,7 @@ func (s *SmartContract) getPeerPendingTransactions(APIstub shim.ChaincodeStubInt
 	resultIterator, err := APIstub.GetQueryResult(query)
 
 	if err != nil {
-		return shim.Error("Error while getting the peding transactions")
+		return shim.Error(err.Error())
 	}
 
 	defer resultIterator.Close()
@@ -244,17 +246,9 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 		return shim.Error("Peer could not be found")
 	}
 
-	if currentTrans.Decision == AbortState {
-		transaction.FinalDecision = AbortState
-		return shim.Success(nil)
-	}
-
 	decision, state := s.checkPeersVoted(transaction)
 
 	if decision {
-		for index := range transaction.InvolvedPeers {
-			transaction.InvolvedPeers[index].PeerDecision = state
-		}
 		transaction.FinalDecision = state
 	}
 
@@ -282,7 +276,7 @@ func (s *SmartContract) checkPeersVoted(tran Transaction) (bool, string) {
 			return true, AbortState
 		} else if (peer.PeerDecision == "" || peer.PeerDecision == PendingState) && time.Now().UTC().After(tran.TransactionExpire) {
 			return true, AbortState
-		} else {
+		} else if peer.PeerDecision == PendingState && time.Now().UTC().Before(tran.TransactionExpire) {
 			return false, PendingState
 		}
 	}
@@ -320,10 +314,6 @@ func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, 
 
 	if decision {
 
-		for index := range scTrans.InvolvedPeers {
-			scTrans.InvolvedPeers[index].PeerDecision = state
-		}
-
 		scTrans.FinalDecision = state
 
 		marshalledUpdate, marshallError := json.Marshal(scTrans)
@@ -356,6 +346,19 @@ func (s *SmartContract) checkTransactionIDExistence(APIstub shim.ChaincodeStubIn
 	}
 
 	return true
+}
+
+func (s *SmartContract) clearPeers(APIstub shim.ChaincodeStubInterface) sc.Response {
+	currentPeers, err := APIstub.GetState(RegisteredPeersKey)
+
+	if err != nil {
+		return shim.Success(nil)
+	}
+
+	currentPeers = nil
+	APIstub.PutState(RegisteredPeersKey, currentPeers)
+
+	return shim.Success(nil)
 }
 
 //registerPeer used to register a new peer into the list of peers registered in the commit process
