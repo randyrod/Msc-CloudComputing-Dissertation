@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -76,6 +77,8 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 		return s.registerPeer(APIstub, args)
 	case "getRegisteredPeers":
 		return s.getRegisteredPeers(APIstub)
+	case "getPeerPendingTransactions":
+		return s.getPeerPendingTransactions(APIstub, args)
 	}
 	//functions
 	return shim.Error("Invalid function")
@@ -100,6 +103,50 @@ func (s *SmartContract) queryTransaction(APIstub shim.ChaincodeStubInterface, ar
 	}
 
 	return shim.Success(trans)
+}
+
+func (s *SmartContract) getPeerPendingTransactions(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
+
+	if len(args) <= 0 {
+		return shim.Error("Invalid number of arguments. Expected 1")
+	}
+
+	query := "{ \"selector\": { \"FinalDecision\": \"P\" } }"
+
+	resultIterator, err := APIstub.GetQueryResult(query)
+
+	if err != nil {
+		return shim.Error("Error while getting the peding transactions")
+	}
+
+	defer resultIterator.Close()
+
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	writtenOnce := false
+	for resultIterator.HasNext() {
+		queryResponse, err := resultIterator.Next()
+
+		if err != nil {
+			return shim.Error("Error while reading the pending transactions")
+		}
+
+		if writtenOnce {
+			buffer.WriteString(",")
+		}
+
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		buffer.WriteString("\"")
+		buffer.WriteString(", \"Record\":")
+		buffer.WriteString(string(queryResponse.Value))
+		buffer.WriteString("}")
+		writtenOnce = true
+	}
+	buffer.WriteString("]")
+
+	return shim.Success(buffer.Bytes())
 }
 
 //addTransaction creates a new transaction for the blockchain
@@ -205,6 +252,9 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 	decision, state := s.checkPeersVoted(transaction)
 
 	if decision {
+		for index := range transaction.InvolvedPeers {
+			transaction.InvolvedPeers[index].PeerDecision = state
+		}
 		transaction.FinalDecision = state
 	}
 
@@ -269,6 +319,11 @@ func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, 
 	decision, state := s.checkPeersVoted(scTrans)
 
 	if decision {
+
+		for index := range scTrans.InvolvedPeers {
+			scTrans.InvolvedPeers[index].PeerDecision = state
+		}
+
 		scTrans.FinalDecision = state
 
 		marshalledUpdate, marshallError := json.Marshal(scTrans)
