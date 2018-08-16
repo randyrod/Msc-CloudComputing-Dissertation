@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	sc "github.com/hyperledger/fabric/protos/peer"
@@ -20,9 +21,10 @@ type Peer struct {
 
 //Transaction defines the structure of a transaction
 type Transaction struct {
-	TransactionID string `json:"TransactionID"`
-	InvolvedPeers []Peer `json:"InvolvedPeers"`
-	FinalDecision string `json:"FinalDecision"`
+	TransactionID     string    `json:"TransactionID"`
+	InvolvedPeers     []Peer    `json:"InvolvedPeers"`
+	FinalDecision     string    `json:"FinalDecision"`
+	TransactionExpire time.Time `json:"TransactionExpire"`
 }
 
 //PeerUpdateRequestModel Model to represent a request to update a peers decision
@@ -82,6 +84,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 //queryTransaction queries an specific transaction
 func (s *SmartContract) queryTransaction(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
 
+	//todo check if any node has not been completed in order to make decision of abort
 	if len(args) != 1 {
 		return shim.Error("Invalid number of arguments. Expecting 1")
 	}
@@ -121,6 +124,7 @@ func (s *SmartContract) addTransaction(APIstub shim.ChaincodeStubInterface, args
 	}
 
 	currentTrans.FinalDecision = PendingState
+	currentTrans.TransactionExpire = time.Now().Add(time.Minute * time.Duration(5)).UTC()
 
 	for index := range currentTrans.InvolvedPeers {
 
@@ -167,6 +171,10 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 		return shim.Error("Internal error with unmarshaling of data")
 	}
 
+	if transaction.FinalDecision != "" && transaction.FinalDecision != PendingState {
+		return shim.Success(nil)
+	}
+
 	if len(transaction.InvolvedPeers) <= 0 {
 		return shim.Error("Invalid number of peers for transaction")
 	}
@@ -189,7 +197,16 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 		return shim.Error("Peer could not be found")
 	}
 
-	//TODO: Check if all peers have voted to make decision
+	if currentTrans.Decision == AbortState {
+		transaction.FinalDecision = AbortState
+		return shim.Success(nil)
+	}
+
+	decision, state := s.checkPeersVoted(transaction)
+
+	if decision {
+		transaction.FinalDecision = state
+	}
 
 	marshalledUpdate, marshallError := json.Marshal(transaction)
 
@@ -200,6 +217,27 @@ func (s *SmartContract) makePeerDecision(APIstub shim.ChaincodeStubInterface, ar
 	APIstub.PutState(transaction.TransactionID, marshalledUpdate)
 
 	return shim.Success(nil)
+}
+
+//checkPeersVoted validates whether the peers have finished voting
+func (s *SmartContract) checkPeersVoted(tran Transaction) (bool, string) {
+
+	if len(tran.InvolvedPeers) <= 0 {
+		return false, ""
+	}
+
+	for _, peer := range tran.InvolvedPeers {
+
+		if peer.PeerDecision != "" && peer.PeerDecision == AbortState {
+			return true, AbortState
+		} else if (peer.PeerDecision == "" || peer.PeerDecision == PendingState) && time.Now().UTC().After(tran.TransactionExpire) {
+			return true, AbortState
+		} else {
+			return false, PendingState
+		}
+	}
+
+	return true, CommitState
 }
 
 func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
@@ -226,6 +264,20 @@ func (s *SmartContract) queryFinalDecision(APIstub shim.ChaincodeStubInterface, 
 
 	if scTrans.TransactionID == "" {
 		return shim.Error("Internal error while getting transaction")
+	}
+
+	decision, state := s.checkPeersVoted(scTrans)
+
+	if decision {
+		scTrans.FinalDecision = state
+
+		marshalledUpdate, marshallError := json.Marshal(scTrans)
+
+		if marshallError != nil {
+			return shim.Error("Internal error while updating transaction")
+		}
+
+		APIstub.PutState(scTrans.TransactionID, marshalledUpdate)
 	}
 
 	var finalDecision = FinalDecisionResponseModel{TransactionID: scTrans.TransactionID, FinalDecision: scTrans.FinalDecision}
