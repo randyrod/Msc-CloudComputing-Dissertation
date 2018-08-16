@@ -368,7 +368,14 @@ func (s *SmartContract) registerPeer(stub shim.ChaincodeStubInterface, args []st
 
 	if err != nil || currentPeers == nil {
 		newPeers := []PeerModel{}
-		newPeers = append(newPeers, PeerModel{PeerID: args[0]})
+
+		peerUnmarshalled := PeerModel{}
+
+		if err := json.Unmarshal([]byte(args[0]), &peerUnmarshalled); err != nil {
+			return shim.Error("Error while parsing passed parameter")
+		}
+
+		newPeers = append(newPeers, peerUnmarshalled)
 		marshalledPeer, marshalErr := json.Marshal(newPeers)
 
 		if marshalErr != nil {
@@ -383,7 +390,13 @@ func (s *SmartContract) registerPeer(stub shim.ChaincodeStubInterface, args []st
 			return shim.Error("Error while retrieving data")
 		}
 
-		unmarshalled = append(unmarshalled, PeerModel{PeerID: args[0]})
+		peerUnmarshalled := PeerModel{}
+
+		if err := json.Unmarshal([]byte(args[0]), &peerUnmarshalled); err != nil {
+			return shim.Error("Error while parsing passed parameter")
+		}
+
+		unmarshalled = append(unmarshalled, peerUnmarshalled)
 
 		updatedMarshal, updatedErr := json.Marshal(unmarshalled)
 
